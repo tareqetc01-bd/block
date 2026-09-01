@@ -78,12 +78,11 @@ class ShortsBlockerService : AccessibilityService() {
         "com.mi.globalbrowser"
     )
 
-    // Full-screen shorts/reels player identifiers and keywords
+    // Full-screen shorts/reels player identifiers (strictly specific to the active shorts player, NOT the feed or home tab)
     private val youtubePlayerIndicators = listOf(
         "reel_watch_fragment",
         "reel_player_fragment",
         "shorts_player_fragment",
-        "reel_recycler",
         "shorts_player_view",
         "reel_player_page",
         "shorts_video_surface_view",
@@ -111,24 +110,15 @@ class ShortsBlockerService : AccessibilityService() {
         "reel_watch_view",
         "reelwatchactivity",
         "shortsactivity",
-        "shorts_shelf",
         "shorts_video_view",
-        "reel_recycler_view",
-        "reel_container",
         "shorts_pager",
         "reel_pager",
-        "shorts_overlay",
-        "reel_overlay",
-        "pivot_bar_shorts",
-        "tab_shorts",
-        "pivot_shorts",
         "shorts_video_container",
         "shorts_view_pager",
-        "youtube_reel",
-        "shorts_chip",
-        "shorts_button"
+        "youtube_reel"
     )
 
+    // Specific text/contentDescription strictly unique to active full-screen Shorts player
     private val youtubeShortsTextKeywords = listOf(
         "dislike this short",
         "like this short",
@@ -136,16 +126,12 @@ class ShortsBlockerService : AccessibilityService() {
         "sound used in this short",
         "remix with this sound",
         "use this sound",
-        "original sound - ",
-        "original sound",
         "create a short",
         "create short",
         "pause short",
         "play short",
         "shorts sound",
         "open remix menu",
-        "shorts",
-        "শর্টস",
         "এই শর্টটি অপছন্দ করুন",
         "এই শর্টটি পছন্দ করুন",
         "শর্টটি অপছন্দ করুন",
@@ -161,7 +147,6 @@ class ShortsBlockerService : AccessibilityService() {
         "reel_viewer_activity",
         "reel_viewer_page",
         "full_screen_video_player_reels",
-        "fb_shorts",
         "reelsvieweractivity",
         "fbshortsactivity",
         "reel_action_bar"
@@ -430,15 +415,8 @@ class ShortsBlockerService : AccessibilityService() {
                             showShortsInstantBlockToast(shortLabel)
                         }
                         recordBlockEvent(shortLabel, currentPkg)
-                        
-                        consecutiveShortsBackAttempts++
-                        if (consecutiveShortsBackAttempts > 3) {
-                            // User is stuck in full-screen shorts -> force Home
-                            consecutiveShortsBackAttempts = 0
-                            performGlobalAction(GLOBAL_ACTION_HOME)
-                        } else {
-                            performGlobalAction(GLOBAL_ACTION_BACK)
-                        }
+                        // Execute BACK to return from Shorts player to the YouTube video feed
+                        performGlobalAction(GLOBAL_ACTION_BACK)
                     }
                 } else {
                     consecutiveShortsBackAttempts = 0
@@ -567,14 +545,8 @@ class ShortsBlockerService : AccessibilityService() {
                         showShortsInstantBlockToast(shortLabel)
                     }
                     recordBlockEvent(shortLabel, packageName)
-
-                    consecutiveShortsBackAttempts++
-                    if (consecutiveShortsBackAttempts > 3) {
-                        consecutiveShortsBackAttempts = 0
-                        performGlobalAction(GLOBAL_ACTION_HOME)
-                    } else {
-                        performGlobalAction(GLOBAL_ACTION_BACK)
-                    }
+                    // Return from Shorts back to normal YouTube video feed
+                    performGlobalAction(GLOBAL_ACTION_BACK)
                 }
             } else {
                 consecutiveShortsBackAttempts = 0

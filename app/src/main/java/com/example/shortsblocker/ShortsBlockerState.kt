@@ -48,6 +48,8 @@ data class BlockEvent(
 
 data class ShortsBlockerUiState(
     val isAccessibilityServiceActive: Boolean = false,
+    val isBatteryOptimizationIgnored: Boolean = false,
+    val isForegroundNotificationEnabled: Boolean = true,
     val isMasterEnabled: Boolean = true,
     val blockYouTube: Boolean = true,
     val blockFacebook: Boolean = true,

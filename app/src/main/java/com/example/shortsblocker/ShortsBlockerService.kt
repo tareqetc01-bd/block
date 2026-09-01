@@ -1,14 +1,21 @@
 package com.example.shortsblocker
 
 import android.accessibilityservice.AccessibilityService
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import android.content.SharedPreferences
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.Toast
+import androidx.core.app.NotificationCompat
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -238,10 +245,69 @@ class ShortsBlockerService : AccessibilityService() {
         }
     }
 
+    private val NOTIFICATION_CHANNEL_ID = "shorts_blocker_service_channel"
+    private val NOTIFICATION_ID = 1001
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                NOTIFICATION_CHANNEL_ID,
+                "ShortsBlocker ব্যাকগ্রাউন্ড সুরক্ষা",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "অ্যাপ লিমিট এবং শর্টস ব্লকিং ব্যাকগ্রাউন্ডে চালু রাখে"
+                setShowBadge(false)
+                lockscreenVisibility = Notification.VISIBILITY_SECRET
+            }
+            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+            notificationManager?.createNotificationChannel(channel)
+        }
+    }
+
+    private fun startOrUpdateForegroundNotification() {
+        try {
+            createNotificationChannel()
+            if (!::prefs.isInitialized) {
+                prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            }
+            val isMasterEnabled = prefs.getBoolean(PREF_ENABLED, true)
+            val isNotifEnabled = prefs.getBoolean(PREF_PERSISTENT_NOTIFICATION, true)
+
+            if (!isMasterEnabled || !isNotifEnabled) {
+                return
+            }
+
+            val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
+            val pendingIntent = if (launchIntent != null) {
+                PendingIntent.getActivity(
+                    this,
+                    0,
+                    launchIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+            } else null
+
+            val notification = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_blocker_shield_1788275701896)
+                .setContentTitle("ShortsBlocker সুরক্ষা সক্রিয় রয়েছে")
+                .setContentText("অ্যাপ লিমিট, শর্টস ও অ্যাড ব্লকার ব্যাকগ্রাউন্ডে চলছে")
+                .setOngoing(true)
+                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .setContentIntent(pendingIntent)
+                .setCategory(NotificationCompat.CATEGORY_SERVICE)
+                .setVisibility(NotificationCompat.VISIBILITY_SECRET)
+                .build()
+
+            startForeground(NOTIFICATION_ID, notification)
+        } catch (_: Exception) {
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
         prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         checkAndResetDailyUsage()
+        startOrUpdateForegroundNotification()
         mainHandler.removeCallbacks(tickerRunnable)
         mainHandler.post(tickerRunnable)
     }
@@ -250,8 +316,24 @@ class ShortsBlockerService : AccessibilityService() {
         super.onServiceConnected()
         prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         checkAndResetDailyUsage()
+        startOrUpdateForegroundNotification()
         mainHandler.removeCallbacks(tickerRunnable)
         mainHandler.post(tickerRunnable)
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        startOrUpdateForegroundNotification()
+        mainHandler.removeCallbacks(tickerRunnable)
+        mainHandler.post(tickerRunnable)
+        return START_STICKY
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        // Ensure ticker and background execution never die even when user clears recent apps
+        mainHandler.removeCallbacks(tickerRunnable)
+        mainHandler.post(tickerRunnable)
+        startOrUpdateForegroundNotification()
     }
 
     override fun onInterrupt() {
@@ -1118,6 +1200,7 @@ class ShortsBlockerService : AccessibilityService() {
         const val PREF_CUSTOM_WEBSITES = "custom_websites_list"
         const val PREF_REMINDER_MESSAGE = "block_reminder_message"
         const val DEFAULT_REMINDER_MESSAGE = "আল্লাহর দিকে ফিরে আসো"
+        const val PREF_PERSISTENT_NOTIFICATION = "persistent_notification_enabled"
 
         // Ad Blocker preferences
         const val PREF_BLOCK_ADS = "block_ads"

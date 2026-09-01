@@ -2,6 +2,7 @@ package com.example.shortsblocker.ui
 
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.provider.Settings
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
@@ -130,6 +131,20 @@ fun ShortsBlockerScreen(
                     isActive = uiState.isAccessibilityServiceActive,
                     onOpenSettings = {
                         openAccessibilitySettings(context)
+                    }
+                )
+            }
+
+            // 1.1 Background Protection & Battery Exemption
+            item {
+                BackgroundKeepAliveCard(
+                    isBatteryOptimized = !uiState.isBatteryOptimizationIgnored,
+                    isPersistentNotifEnabled = uiState.isForegroundNotificationEnabled,
+                    onRequestIgnoreBattery = {
+                        requestIgnoreBatteryOptimizations(context)
+                    },
+                    onTogglePersistentNotif = {
+                        viewModel.togglePersistentNotification(it)
                     }
                 )
             }
@@ -1079,5 +1094,141 @@ private fun openAccessibilitySettings(context: Context) {
         }
         context.startActivity(intent)
     } catch (_: Exception) {
+    }
+}
+
+private fun requestIgnoreBatteryOptimizations(context: Context) {
+    try {
+        val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+            data = Uri.parse("package:${context.packageName}")
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+        context.startActivity(intent)
+    } catch (e: Exception) {
+        try {
+            val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            context.startActivity(intent)
+        } catch (_: Exception) {
+            try {
+                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = Uri.parse("package:${context.packageName}")
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                context.startActivity(intent)
+            } catch (_: Exception) {}
+        }
+    }
+}
+
+@Composable
+private fun BackgroundKeepAliveCard(
+    isBatteryOptimized: Boolean,
+    isPersistentNotifEnabled: Boolean,
+    onRequestIgnoreBattery: () -> Unit,
+    onTogglePersistentNotif: (Boolean) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth().testTag("background_keep_alive_card"),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isBatteryOptimized) {
+                VioletSecondary.copy(alpha = 0.08f)
+            } else {
+                EmeraldSuccess.copy(alpha = 0.08f)
+            }
+        ),
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            if (isBatteryOptimized) VioletSecondary.copy(alpha = 0.3f) else EmeraldSuccess.copy(alpha = 0.3f)
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(if (isBatteryOptimized) VioletSecondary.copy(alpha = 0.15f) else EmeraldSuccess.copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = if (isBatteryOptimized) Icons.Default.BatteryAlert else Icons.Default.BatteryChargingFull,
+                            contentDescription = null,
+                            tint = if (isBatteryOptimized) VioletSecondary else EmeraldSuccess,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Column {
+                        Text(
+                            text = "ব্যাকগ্রাউন্ড নিরবচ্ছিন্ন সুরক্ষা (24/7 Keep-Alive)",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = if (isBatteryOptimized) "Recent Apps থেকে ক্লিয়ার করলেও সচল রাখতে ব্যাটারি সেটিং ঠিক করুন" else "সিস্টেম ব্যাটারি অপটিমাইজেশন বন্ধ রয়েছে (সুরক্ষিত)",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            if (isBatteryOptimized) {
+                Button(
+                    onClick = onRequestIgnoreBattery,
+                    modifier = Modifier.fillMaxWidth().testTag("unrestrict_battery_button"),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = VioletSecondary)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.FlashOn,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("ব্যাটারি আনরেস্ট্রিক্টেড / ডোন্ট অপটিমাইজ করুন")
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Persistent Foreground Notification",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = "Android OS যেন মেমোরি থেকে সার্ভিসটি বন্ধ না করে",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = isPersistentNotifEnabled,
+                    onCheckedChange = onTogglePersistentNotif,
+                    modifier = Modifier.testTag("persistent_notif_switch")
+                )
+            }
+        }
     }
 }

@@ -35,6 +35,7 @@ class ShortsBlockerViewModel(application: Application) : AndroidViewModel(applic
 
     fun refresh() {
         checkAccessibilityStatus()
+        checkBatteryOptimizationStatus()
         loadStateFromPreferences()
         loadInstalledApps()
     }
@@ -43,10 +44,17 @@ class ShortsBlockerViewModel(application: Application) : AndroidViewModel(applic
         viewModelScope.launch {
             while (isActive) {
                 checkAccessibilityStatus()
+                checkBatteryOptimizationStatus()
                 syncStatistics()
                 delay(1500)
             }
         }
+    }
+
+    fun checkBatteryOptimizationStatus() {
+        val powerManager = getApplication<Application>().getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
+        val isIgnored = powerManager?.isIgnoringBatteryOptimizations(getApplication<Application>().packageName) ?: false
+        _uiState.update { it.copy(isBatteryOptimizationIgnored = isIgnored) }
     }
 
     fun checkAccessibilityStatus() {
@@ -191,6 +199,7 @@ class ShortsBlockerViewModel(application: Application) : AndroidViewModel(applic
         val blockAds = prefs.getBoolean(ShortsBlockerService.PREF_BLOCK_ADS, true)
         val autoSkipAds = prefs.getBoolean(ShortsBlockerService.PREF_AUTO_SKIP_VIDEO_ADS, true)
         val blockPopupAds = prefs.getBoolean(ShortsBlockerService.PREF_BLOCK_POPUP_ADS, true)
+        val persistentNotif = prefs.getBoolean(ShortsBlockerService.PREF_PERSISTENT_NOTIFICATION, true)
         val adsBlocked = prefs.getInt(ShortsBlockerService.PREF_ADS_BLOCKED_COUNT, 0)
         val customAdFiltersStr = prefs.getString(ShortsBlockerService.PREF_CUSTOM_AD_FILTERS, "") ?: ""
         val customAdFilters = customAdFiltersStr.split(";")
@@ -256,6 +265,7 @@ class ShortsBlockerViewModel(application: Application) : AndroidViewModel(applic
                 blockAdultWebsites = blockAdult,
                 customBlockedWebsites = customWebsites,
                 reminderMessage = reminderMsg,
+                isForegroundNotificationEnabled = persistentNotif,
                 blockAds = blockAds,
                 autoSkipVideoAds = autoSkipAds,
                 blockPopupAds = blockPopupAds,
@@ -272,6 +282,11 @@ class ShortsBlockerViewModel(application: Application) : AndroidViewModel(applic
                 recentEvents = events
             )
         }
+    }
+
+    fun togglePersistentNotification(enabled: Boolean) {
+        prefs.edit().putBoolean(ShortsBlockerService.PREF_PERSISTENT_NOTIFICATION, enabled).commit()
+        _uiState.update { it.copy(isForegroundNotificationEnabled = enabled) }
     }
 
     // Per-app config setters

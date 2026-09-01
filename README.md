@@ -16,3 +16,23 @@ ShortsBlocker is a modern, lightweight, and privacy-focused Android utility buil
 - **UI Layer**: Jetpack Compose with Material 3, ViewModel, and StateFlow.
 - **Accessibility Service**: `ShortsBlockerService` listens for window and content change events from target apps and closes reel screens.
 - **Persistence**: SharedPreferences for local configuration and block stats.
+
+## How to Get the APK
+
+### 1. Directly from AI Studio
+- Click on the project settings / export menu in the top right corner.
+- Select **Export project as ZIP** or **Generate APK / AAB**.
+
+### 2. Automatically via GitHub Actions (CI/CD)
+1. Push this repository to GitHub.
+2. Go to the **Actions** tab on your GitHub repository.
+3. The **Build & Release Android APK** workflow will automatically run.
+4. Once completed, click on the workflow run and download the **ShortsBlocker-Debug-APK** artifact from the Artifacts section.
+
+### 3. Build Locally with Gradle
+```bash
+gradle assembleDebug
+# The APK will be generated at:
+# app/build/outputs/apk/debug/app-debug.apk
+```
+

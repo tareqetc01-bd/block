@@ -55,11 +55,33 @@ class ShortsBlockerService : AccessibilityService() {
         "melbet", "mostbet", "adcolony", "applovin", "unityads", "ironsrc"
     )
 
-    // Skip Ad button identifiers and texts across apps
+    // Skip Ad button identifiers and texts across apps and web
     private val skipAdButtonKeywords = listOf(
+        // Resource / View IDs
         "skip_ad", "ad_skip", "skip_button", "skipbutton", "btn_skip",
-        "ytp-ad-skip-button", "action_skip", "skip_ad_container",
-        "skip ad", "skip ads", "skip", "বিজ্ঞাপন এড়িয়ে যান", "বিজ্ঞাপন এড়িয়ে যান", "স্কিপ"
+        "ytp-ad-skip-button", "ytp-ad-skip-button-modern", "ytp-ad-skip-button-slot",
+        "ytp-ad-skip-button-text", "ytp-ad-preview-container", "action_skip",
+        "skip_ad_container", "ad_skip_button", "video_ad_skip_button",
+        "skip_overlay", "skip_countdown", "ad_dismiss", "dismiss_ad",
+        "close_ad", "ad_close", "close_ad_button", "tt_video_ad_close",
+        "tt_reward_full_count_down", "anythink_myoffer_btn_close",
+        "ksad_end_close_btn", "al_exo_close_button", "mbridge_interstitial_close_id",
+        "native_ad_view", "interstitial_control_button", "iv_close",
+        "btn_close_ad", "ad_cancel", "cancel_ad", "btn_close", "banner_close",
+        "popup_close", "ad_close_btn", "btn_ad_close", "close_button", "ad_skip_text",
+
+        // Texts / Content Descriptions
+        "skip ad", "skip ads", "skip video", "skip in", "skip",
+        "skipping in", "ad will end in", "close ad", "close ads",
+        "dismiss ad", "dismiss advertisement", "close advertisement",
+        "বিজ্ঞাপন এড়িয়ে যান", "বিজ্ঞাপন এড়িয়ে যান", "স্কিপ",
+        "বিজ্ঞাপন বন্ধ করুন", "বিজ্ঞাপন বাদ দিন", "বিজ্ঞাপন"
+    )
+
+    private val popupAdCloseKeywords = listOf(
+        "close", "dismiss", "✕", "✖", "❌", "×", "x",
+        "btn_close", "close_btn", "iv_close", "close_button",
+        "ad_close", "popup_close", "banner_close", "interstitial_close"
     )
 
     // Browsers package names to inspect for URL / Web address bars
@@ -149,7 +171,28 @@ class ShortsBlockerService : AccessibilityService() {
         "full_screen_video_player_reels",
         "reelsvieweractivity",
         "fbshortsactivity",
-        "reel_action_bar"
+        "reel_action_bar",
+        "fb_shorts_container",
+        "reels_video_surface",
+        "reels_tray_fullscreen",
+        "fb_reels_video_view"
+    )
+
+    private val facebookReelsTextKeywords = listOf(
+        "remix this reel",
+        "remix with this reel",
+        "use this audio",
+        "original audio",
+        "like this reel",
+        "comment on reel",
+        "share this reel",
+        "swipe up for next reel",
+        "swipe up to view next reel",
+        "audio used in reel",
+        "এই রিলটি পছন্দ করুন",
+        "এই রিলটি শেয়ার করুন",
+        "এই অডিও দিয়ে রিল তৈরি করুন",
+        "রিল তৈরি করুন"
     )
 
     private val instagramReelsPlayerIndicators = listOf(
@@ -162,7 +205,25 @@ class ShortsBlockerService : AccessibilityService() {
         "clips_action_bar",
         "clips_author_container",
         "clips_camera",
-        "clipsvieweractivity"
+        "clipsvieweractivity",
+        "reel_viewer_root",
+        "clips_swipe_refresh_layout",
+        "clips_audio_mix_editor"
+    )
+
+    private val instagramReelsTextKeywords = listOf(
+        "reels video player",
+        "audio used in this reel",
+        "remix this reel",
+        "use audio",
+        "like reel",
+        "comment on reel",
+        "share reel",
+        "original audio - ",
+        "watch reels",
+        "clips_audio",
+        "এই রিলটি লাইক করুন",
+        "এই রিলটি শেয়ার করুন"
     )
 
     // 1-second continuous foreground ticker to ensure time tracking always happens
@@ -323,6 +384,11 @@ class ShortsBlockerService : AccessibilityService() {
         }
 
         if (currentPkg.isBlank()) return
+
+        // Auto-skip video ads and close popup ads continuously in any app or webview
+        if (root != null) {
+            tryAutoSkipAds(root, currentPkg)
+        }
 
         val trackedApp = getTrackedAppInfo(currentPkg) ?: return
         val appKey = trackedApp.appKey
@@ -603,17 +669,115 @@ class ShortsBlockerService : AccessibilityService() {
 
     private fun tryAutoSkipAds(root: AccessibilityNodeInfo, packageName: String) {
         val autoSkip = prefs.getBoolean(PREF_AUTO_SKIP_VIDEO_ADS, true)
-        if (!autoSkip) return
+        val blockPopup = prefs.getBoolean(PREF_BLOCK_POPUP_ADS, true)
+        val blockAds = prefs.getBoolean(PREF_BLOCK_ADS, true)
+        if (!autoSkip && !blockPopup && !blockAds) return
 
-        val skipButton = findClickableNodeMatchingKeywords(root, skipAdButtonKeywords) ?: return
-        val clicked = skipButton.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-        if (clicked) {
-            val now = SystemClock.elapsedRealtime()
-            if (now - lastToastTimestamp >= 3000L) {
-                lastToastTimestamp = now
-                recordAdBlockEvent("Video Ad Skipped", packageName)
+        // 1. Try finding and clicking Skip Ad buttons (YouTube, Facebook, Instagram, Apps, Games)
+        if (autoSkip || blockAds) {
+            val skipButton = findClickableNodeMatchingKeywords(root, skipAdButtonKeywords)
+            if (skipButton != null) {
+                val clicked = performRobustClick(skipButton)
+                if (clicked) {
+                    val now = SystemClock.elapsedRealtime()
+                    if (now - lastToastTimestamp >= 2500L) {
+                        lastToastTimestamp = now
+                        recordAdBlockEvent("Video Ad Skipped", packageName)
+                        Handler(Looper.getMainLooper()).post {
+                            Toast.makeText(applicationContext, "⚡ বিজ্ঞাপন স্কিপ করা হয়েছে! (Ad Skipped)", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    return
+                }
             }
         }
+
+        // 2. If popup ads blocking is active, check for popup/interstitial close buttons
+        if (blockPopup || blockAds) {
+            val isLikelyAd = isLikelyAdContainerOrActivity(root, packageName)
+            if (isLikelyAd) {
+                val closeButton = findClickableNodeMatchingKeywords(root, popupAdCloseKeywords)
+                if (closeButton != null) {
+                    val clicked = performRobustClick(closeButton)
+                    if (clicked) {
+                        val now = SystemClock.elapsedRealtime()
+                        if (now - lastToastTimestamp >= 2500L) {
+                            lastToastTimestamp = now
+                            recordAdBlockEvent("Popup Ad Dismissed", packageName)
+                            Handler(Looper.getMainLooper()).post {
+                                Toast.makeText(applicationContext, "🛡️ পপ-আপ বিজ্ঞাপন বন্ধ করা হয়েছে!", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun performRobustClick(node: AccessibilityNodeInfo): Boolean {
+        // Try clicking direct node
+        if (node.isClickable && node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+            return true
+        }
+
+        // Try climbing parent tree (up to 5 levels)
+        var currentParent = node.parent
+        var depth = 0
+        while (currentParent != null && depth < 5) {
+            if (currentParent.isClickable && currentParent.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+                return true
+            }
+            currentParent = currentParent.parent
+            depth++
+        }
+
+        // Try direct ACTION_CLICK as fallback on the node even if isClickable reports false
+        if (node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+            return true
+        }
+
+        // Try clicking clickable child
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            if (child.isClickable && child.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+                return true
+            }
+        }
+
+        return false
+    }
+
+    private fun isLikelyAdContainerOrActivity(root: AccessibilityNodeInfo, packageName: String): Boolean {
+        val rootClass = root.className?.toString()?.lowercase() ?: ""
+        val rootPkg = packageName.lowercase()
+        if (rootClass.contains("adactivity") || rootClass.contains("interstitialactivity") || rootClass.contains("googleadactivity")) {
+            return true
+        }
+        if (rootPkg.contains("unityads") || rootPkg.contains("applovin") || rootPkg.contains("adcolony") || rootPkg.contains("ironsrc")) {
+            return true
+        }
+        return hasAdIndicatorsInTree(root)
+    }
+
+    private fun hasAdIndicatorsInTree(node: AccessibilityNodeInfo, depth: Int = 0): Boolean {
+        if (depth > 20) return false
+        val viewId = node.viewIdResourceName?.lowercase() ?: ""
+        val text = node.text?.toString()?.lowercase() ?: ""
+        val desc = node.contentDescription?.toString()?.lowercase() ?: ""
+
+        if (viewId.contains("ad_view") || viewId.contains("ad_container") || viewId.contains("banner_ad") ||
+            viewId.contains("native_ad") || viewId.contains("interstitial_ad") ||
+            text.equals("ad", ignoreCase = true) || text.equals("sponsored", ignoreCase = true) ||
+            desc.equals("advertisement", ignoreCase = true) || desc.equals("sponsored", ignoreCase = true)
+        ) {
+            return true
+        }
+
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            if (hasAdIndicatorsInTree(child, depth + 1)) return true
+        }
+        return false
     }
 
     private fun findClickableNodeMatchingKeywords(
@@ -621,7 +785,7 @@ class ShortsBlockerService : AccessibilityService() {
         keywords: List<String>,
         depth: Int = 0
     ): AccessibilityNodeInfo? {
-        if (depth > 30) return null
+        if (depth > 35) return null
 
         val viewId = node.viewIdResourceName?.lowercase() ?: ""
         val text = node.text?.toString()?.lowercase() ?: ""
@@ -632,9 +796,7 @@ class ShortsBlockerService : AccessibilityService() {
         }
 
         if (matches) {
-            if (node.isClickable) return node
-            val parent = node.parent
-            if (parent != null && parent.isClickable) return parent
+            return node
         }
 
         for (i in 0 until node.childCount) {
@@ -837,14 +999,14 @@ class ShortsBlockerService : AccessibilityService() {
         if (className.contains("ReelsViewerActivity", ignoreCase = true) || className.contains("FbShortsViewerFragment", ignoreCase = true)) {
             return true
         }
-        return hasMatchingPlayerNode(root, facebookReelsPlayerIndicators)
+        return hasMatchingPlayerNode(root, facebookReelsPlayerIndicators, facebookReelsTextKeywords)
     }
 
     private fun isInstagramReelsPlayerActive(root: AccessibilityNodeInfo, className: String = ""): Boolean {
         if (className.contains("ClipsViewerActivity", ignoreCase = true) || className.contains("ClipsViewerFragment", ignoreCase = true)) {
             return true
         }
-        return hasMatchingPlayerNode(root, instagramReelsPlayerIndicators)
+        return hasMatchingPlayerNode(root, instagramReelsPlayerIndicators, instagramReelsTextKeywords)
     }
 
     private fun hasMatchingPlayerNode(

@@ -279,7 +279,7 @@ class ShortsBlockerViewModel(application: Application) : AndroidViewModel(applic
         prefs.edit()
             .putInt("app_limit_$appKey", appLimitMinutes)
             .putInt("shorts_limit_$appKey", shortsLimitMinutes)
-            .apply()
+            .commit()
 
         _uiState.update { state ->
             when (appKey) {
@@ -318,7 +318,7 @@ class ShortsBlockerViewModel(application: Application) : AndroidViewModel(applic
             .putBoolean("app_locked_$appKey", false)
             .putLong("app_locked_until_$appKey", 0L)
             .putLong("app_used_sec_$appKey", 0L)
-            .apply()
+            .commit()
 
         _uiState.update { state ->
             when (appKey) {
@@ -360,7 +360,7 @@ class ShortsBlockerViewModel(application: Application) : AndroidViewModel(applic
             .putBoolean("shorts_locked_$appKey", false)
             .putLong("shorts_locked_until_$appKey", 0L)
             .putLong("shorts_used_sec_$appKey", 0L)
-            .apply()
+            .commit()
 
         _uiState.update { state ->
             when (appKey) {
@@ -565,7 +565,7 @@ class ShortsBlockerViewModel(application: Application) : AndroidViewModel(applic
             editor.putLong("shorts_locked_until_$it", 0L)
             editor.putLong("shorts_used_sec_$it", 0L)
         }
-        editor.apply()
+        editor.commit()
 
         _uiState.update {
             it.copy(

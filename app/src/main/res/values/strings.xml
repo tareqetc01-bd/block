@@ -1,5 +1,4 @@
 <resources>
     <string name="app_name">Blocker</string>
-    <string name="accessibility_service_label">Shorts &amp; Ads Blocker Service</string>
-    <string name="accessibility_service_description">Helps block YouTube Shorts, Reels, intrusive ads and track screen time.</string>
+    <string name="accessibility_service_description">ShortsBlocker monitors active app screens to automatically detect and block distracting Shorts, Reels, adult websites, and enforce daily app screen limits.</string>
 </resources>

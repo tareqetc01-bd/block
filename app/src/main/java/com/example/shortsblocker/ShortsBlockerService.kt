@@ -272,15 +272,15 @@ class ShortsBlockerService : AccessibilityService() {
         val isMasterEnabled = prefs.getBoolean(PREF_ENABLED, true)
         if (!isMasterEnabled) return null
 
+        val lowerPkg = pkg.lowercase()
         return when {
-            pkg.contains("youtube") && prefs.getBoolean(PREF_BLOCK_YOUTUBE, true) -> {
+            lowerPkg.contains("youtube") -> {
                 TrackedAppInfo(appKey = "youtube", appLabel = "YouTube", packageName = pkg, isCustomApp = false)
             }
-            (pkg.contains("facebook.katana") || pkg.contains("facebook.lite")) &&
-                    prefs.getBoolean(PREF_BLOCK_FACEBOOK, true) -> {
+            lowerPkg.contains("facebook.katana") || lowerPkg.contains("facebook.lite") || lowerPkg.contains("facebook.orca") -> {
                 TrackedAppInfo(appKey = "facebook", appLabel = "Facebook", packageName = pkg, isCustomApp = false)
             }
-            pkg.contains("instagram") && prefs.getBoolean(PREF_BLOCK_INSTAGRAM, true) -> {
+            lowerPkg.contains("instagram") -> {
                 TrackedAppInfo(appKey = "instagram", appLabel = "Instagram", packageName = pkg, isCustomApp = false)
             }
             else -> {
@@ -326,7 +326,7 @@ class ShortsBlockerService : AccessibilityService() {
                 .putBoolean("app_locked_$appKey", false)
                 .putLong("app_locked_until_$appKey", 0L)
                 .putLong("app_used_sec_$appKey", 0L)
-                .apply()
+                .commit()
             return false
         }
         return true
@@ -346,7 +346,7 @@ class ShortsBlockerService : AccessibilityService() {
                 .putBoolean("shorts_locked_$appKey", false)
                 .putLong("shorts_locked_until_$appKey", 0L)
                 .putLong("shorts_used_sec_$appKey", 0L)
-                .apply()
+                .commit()
             return false
         }
         return true
@@ -397,7 +397,7 @@ class ShortsBlockerService : AccessibilityService() {
         // 1. Check if app is locked under 24-hour lock rule
         if (isAppLocked(appKey)) {
             val lockUntil = prefs.getLong("app_locked_until_$appKey", 0L)
-            if (now - lastHomeActionTimestamp >= 600L) {
+            if (now - lastHomeActionTimestamp >= 500L) {
                 lastHomeActionTimestamp = now
                 showApp24HourLockedToast(appLabel, lockUntil)
                 recordBlockEvent("$appLabel (২৪ ঘণ্টার লকড / 24h Lock)", currentPkg)
@@ -413,7 +413,7 @@ class ShortsBlockerService : AccessibilityService() {
         val appPrefUsedKey = "app_used_sec_$appKey"
         val appLimitMinutes = prefs.getInt(appPrefLimitKey, 0)
         val currentAppUsed = prefs.getLong(appPrefUsedKey, 0L) + 1L
-        prefs.edit().putLong(appPrefUsedKey, currentAppUsed).apply()
+        prefs.edit().putLong(appPrefUsedKey, currentAppUsed).commit()
 
         // 3. Check if App Limit is exceeded -> Trigger 24-hour Lockout
         if (appLimitMinutes > 0 && currentAppUsed >= (appLimitMinutes * 60L)) {
@@ -421,14 +421,13 @@ class ShortsBlockerService : AccessibilityService() {
             prefs.edit()
                 .putBoolean("app_locked_$appKey", true)
                 .putLong("app_locked_until_$appKey", lockUntilTimestamp)
-                .apply()
+                .commit()
 
-            if (now - lastHomeActionTimestamp >= 600L) {
+            if (now - lastHomeActionTimestamp >= 500L) {
                 lastHomeActionTimestamp = now
                 showApp24HourLockedToast(appLabel, lockUntilTimestamp)
                 recordBlockEvent("$appLabel (২৪ ঘণ্টার লকড / 24h Lock)", currentPkg)
                 activeForegroundPackage = ""
-                // Force exit back to Home screen immediately
                 performGlobalAction(GLOBAL_ACTION_HOME)
                 performGlobalAction(GLOBAL_ACTION_BACK)
             }
@@ -450,7 +449,7 @@ class ShortsBlockerService : AccessibilityService() {
                 val shortsLimitMinutes = prefs.getInt(shortsPrefLimitKey, 0) // -1: Unlimited, 0: Block (Off), >0: Mins
 
                 val currentShortsUsed = prefs.getLong(shortsPrefUsedKey, 0L) + 1L
-                prefs.edit().putLong(shortsPrefUsedKey, currentShortsUsed).apply()
+                prefs.edit().putLong(shortsPrefUsedKey, currentShortsUsed).commit()
 
                 val shortsLocked = isShortsLocked(appKey)
 
@@ -463,11 +462,12 @@ class ShortsBlockerService : AccessibilityService() {
                         prefs.edit()
                             .putBoolean("shorts_locked_$appKey", true)
                             .putLong("shorts_locked_until_$appKey", shortsLockUntil)
-                            .apply()
+                            .commit()
                     }
 
                     if (now - lastBackActionTimestamp >= THROTTLE_INTERVAL_MS) {
                         lastBackActionTimestamp = now
+                        consecutiveShortsBackAttempts++
                         val shortLabel = when (appKey) {
                             "youtube" -> "YouTube Shorts"
                             "facebook" -> "Facebook Reels"
@@ -481,8 +481,11 @@ class ShortsBlockerService : AccessibilityService() {
                             showShortsInstantBlockToast(shortLabel)
                         }
                         recordBlockEvent(shortLabel, currentPkg)
-                        // Execute BACK to return from Shorts player to the YouTube video feed
-                        performGlobalAction(GLOBAL_ACTION_BACK)
+                        if (consecutiveShortsBackAttempts > 2) {
+                            performGlobalAction(GLOBAL_ACTION_HOME)
+                        } else {
+                            performGlobalAction(GLOBAL_ACTION_BACK)
+                        }
                     }
                 } else {
                     consecutiveShortsBackAttempts = 0
@@ -553,10 +556,10 @@ class ShortsBlockerService : AccessibilityService() {
                 prefs.edit()
                     .putBoolean("app_locked_$appKey", true)
                     .putLong("app_locked_until_$appKey", lockUntilTimestamp)
-                    .apply()
+                    .commit()
             }
 
-            if (now - lastHomeActionTimestamp >= 600L) {
+            if (now - lastHomeActionTimestamp >= 500L) {
                 lastHomeActionTimestamp = now
                 val lockUntil = prefs.getLong("app_locked_until_$appKey", System.currentTimeMillis() + 24 * 3600 * 1000L)
                 showApp24HourLockedToast(appLabel, lockUntil)
@@ -570,12 +573,12 @@ class ShortsBlockerService : AccessibilityService() {
 
         val isShortsOpen = when {
             isCustomApp -> true
-            root != null && packageName.contains("youtube") -> isYouTubeShortsPlayerActive(root, eventClassName)
-            root != null && (packageName.contains("facebook.katana") || packageName.contains("facebook.lite")) -> isFacebookReelsPlayerActive(root, eventClassName)
-            root != null && packageName.contains("instagram") -> isInstagramReelsPlayerActive(root, eventClassName)
-            packageName.contains("youtube") && (eventClassName.contains("ReelWatchActivity", ignoreCase = true) || eventClassName.contains("ShortsActivity", ignoreCase = true)) -> true
-            packageName.contains("instagram") && eventClassName.contains("ClipsViewerActivity", ignoreCase = true) -> true
-            (packageName.contains("facebook.katana") || packageName.contains("facebook.lite")) && eventClassName.contains("ReelsViewerActivity", ignoreCase = true) -> true
+            root != null && packageName.contains("youtube", ignoreCase = true) -> isYouTubeShortsPlayerActive(root, eventClassName)
+            root != null && (packageName.contains("facebook.katana", ignoreCase = true) || packageName.contains("facebook.lite", ignoreCase = true) || packageName.contains("facebook.orca", ignoreCase = true)) -> isFacebookReelsPlayerActive(root, eventClassName)
+            root != null && packageName.contains("instagram", ignoreCase = true) -> isInstagramReelsPlayerActive(root, eventClassName)
+            packageName.contains("youtube", ignoreCase = true) && (eventClassName.contains("ReelWatchActivity", ignoreCase = true) || eventClassName.contains("ShortsActivity", ignoreCase = true) || eventClassName.contains("ReelItemFragment", ignoreCase = true)) -> true
+            packageName.contains("instagram", ignoreCase = true) && eventClassName.contains("ClipsViewerActivity", ignoreCase = true) -> true
+            (packageName.contains("facebook.katana", ignoreCase = true) || packageName.contains("facebook.lite", ignoreCase = true)) && eventClassName.contains("ReelsViewerActivity", ignoreCase = true) -> true
             else -> false
         }
 
@@ -593,11 +596,12 @@ class ShortsBlockerService : AccessibilityService() {
                     prefs.edit()
                         .putBoolean("shorts_locked_$appKey", true)
                         .putLong("shorts_locked_until_$appKey", shortsLockUntil)
-                        .apply()
+                        .commit()
                 }
 
                 if (now - lastBackActionTimestamp >= THROTTLE_INTERVAL_MS) {
                     lastBackActionTimestamp = now
+                    consecutiveShortsBackAttempts++
                     val shortLabel = when (appKey) {
                         "youtube" -> "YouTube Shorts"
                         "facebook" -> "Facebook Reels"
@@ -611,8 +615,11 @@ class ShortsBlockerService : AccessibilityService() {
                         showShortsInstantBlockToast(shortLabel)
                     }
                     recordBlockEvent(shortLabel, packageName)
-                    // Return from Shorts back to normal YouTube video feed
-                    performGlobalAction(GLOBAL_ACTION_BACK)
+                    if (consecutiveShortsBackAttempts > 2) {
+                        performGlobalAction(GLOBAL_ACTION_HOME)
+                    } else {
+                        performGlobalAction(GLOBAL_ACTION_BACK)
+                    }
                 }
             } else {
                 consecutiveShortsBackAttempts = 0
@@ -959,7 +966,12 @@ class ShortsBlockerService : AccessibilityService() {
     }
 
     private fun isYouTubeShortsPlayerActive(root: AccessibilityNodeInfo, className: String = ""): Boolean {
-        if (className.contains("ReelWatchActivity", ignoreCase = true) || className.contains("ShortsActivity", ignoreCase = true)) {
+        val lowerClass = className.lowercase()
+        if (lowerClass.contains("reelwatchactivity") ||
+            lowerClass.contains("shortsactivity") ||
+            lowerClass.contains("reelitemfragment") ||
+            lowerClass.contains("reelwatchfragment") ||
+            lowerClass.contains("reelplayerview")) {
             return true
         }
 
@@ -972,17 +984,18 @@ class ShortsBlockerService : AccessibilityService() {
     }
 
     private fun isYouTubeShortsTabSelected(node: AccessibilityNodeInfo, depth: Int = 0): Boolean {
-        if (depth > 20) return false
+        if (depth > 25) return false
 
         val viewId = node.viewIdResourceName?.lowercase() ?: ""
         val text = node.text?.toString()?.lowercase() ?: ""
         val desc = node.contentDescription?.toString()?.lowercase() ?: ""
 
         val isShortsTabNode = (viewId.contains("pivot_shorts") || viewId.contains("tab_shorts") ||
+                viewId.contains("reel_pivot") ||
                 desc.contains("shorts") || desc.contains("শর্টস") ||
                 text.equals("shorts", ignoreCase = true) || text.equals("শর্টস", ignoreCase = true))
 
-        if (isShortsTabNode && node.isSelected) {
+        if (isShortsTabNode && (node.isSelected || node.isFocused)) {
             return true
         }
 

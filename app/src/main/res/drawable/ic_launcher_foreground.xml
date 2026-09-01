@@ -1,17 +1,8 @@
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp"
-    android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
-    <!-- Shield Outline -->
-    <path
-        android:fillColor="#3B82F6"
-        android:pathData="M54,20 L28,32 C28,58 39,78 54,88 C69,78 80,58 80,32 L54,20 Z"/>
-    <!-- Check / Block Slash Inside -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M48,42 L60,54 M60,42 L48,54"
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="4"
-        android:strokeLineCap="round"/>
-</vector>
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:width="72dp"
+        android:height="72dp"
+        android:drawable="@drawable/ic_blocker_shield_1788275701896"
+        android:gravity="center" />
+</layer-list>
